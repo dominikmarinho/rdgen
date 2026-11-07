@@ -1,0 +1,17 @@
+name: Stop deferred Linux build
+on:
+  push:
+    branches: [master]
+    paths: ['.github/workflows/pause-linux.yml']
+permissions:
+  actions: write
+  contents: read
+jobs:
+  cancel:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cancel deferred Linux build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh run cancel 42391004812 --repo "$GH_REPO"
