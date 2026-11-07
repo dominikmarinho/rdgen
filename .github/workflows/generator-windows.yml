@@ -1,6 +1,9 @@
 name: Custom Windows Client Generator
 run-name: Custom Windows Client Generator
-on: 
+on:
+  push:
+    branches: [master]
+    paths: ['.kinimod/build-windows']
   workflow_dispatch:
     inputs:
       version:
@@ -20,6 +23,11 @@ on:
         type: string
 
 
+permissions:
+  contents: read
+  actions: write
+  id-token: write
+
 env:
   SCITER_RUST_VERSION: "1.75" # https://github.com/rustdesk/rustdesk/discussions/7503, also 1.78 has ABI change which causes our sciter version not working, https://blog.rust-lang.org/2024/03/30/i128-layout-update.html
   RUST_VERSION: "1.75" # sciter failed on m1 with 1.78 because of https://blog.rust-lang.org/2024/03/30/i128-layout-update.html
@@ -36,32 +44,32 @@ env:
   # vcpkg version: 2024.07.12
   VCPKG_COMMIT_ID: "9e593bb18ea69cc5095e012465dcd675a822ed0d"
   ARMV7_VCPKG_COMMIT_ID: "6f29f12e82a8293156836ad81cc9bf5af41fe836"
-  VERSION: "${{ inputs.version }}"
+  VERSION: "${{ inputs.version || '1.5.1' }}"
   NDK_VERSION: "r28c"
   #signing keys env variable checks
   ANDROID_SIGNING_KEY: "${{ secrets.ANDROID_SIGNING_KEY }}"
   MACOS_P12_BASE64: "${{ secrets.MACOS_P12_BASE64 }}"
   UPLOAD_ARTIFACT: 'true'
   SIGN_BASE_URL: "${{ secrets.SIGN_BASE_URL }}"
-  STATUS_URL: "${{ secrets.GENURL }}/updategh"
+  STATUS_URL: "https://acesso.remoto.api.br/kinimod/updategh"
 
 
 jobs:
   setup:
     uses: ./.github/workflows/fetch-encrypted-secrets.yml
     with:
-      zip_url_json: ${{ inputs.zip_url }}
+      zip_url_json: ${{ inputs.zip_url || '{}' }}
 
   generate-bridge:
     uses: ./.github/workflows/bridge.yml
     with:
-      version: ${{ inputs.version }}
+      version: ${{ inputs.version || '1.5.1' }}
 
   build-RustDeskTempTopMostWindow:
     needs: setup
     uses: ./.github/workflows/third-party-RustDeskTempTopMostWindow.yml
     with:
-      rustdesk-version: ${{ inputs.version }}
+      rustdesk-version: ${{ inputs.version || '1.5.1' }}
       upload-artifact: true
       target: windows-2022
       configuration: Release
@@ -108,7 +116,7 @@ jobs:
         continue-on-error: true
         uses: fjogeleit/http-request-action@v1
         with:
-          url: "${{ secrets.GENURL }}/cleanzip"
+          url: "https://acesso.remoto.api.br/kinimod/cleanzip"
           method: 'POST'
           customHeaders: '{"Content-Type": "application/json"}'
           data: '{"uuid": "${{ env.uuid }}"}'
@@ -123,7 +131,7 @@ jobs:
       - name: Set rdgen value
         if: ${{ env.rdgen == 'true' }}
         run: |
-          echo "STATUS_URL=${{ secrets.GENURL }}/updategh" >> $env:GITHUB_ENV
+          echo "STATUS_URL=https://acesso.remoto.api.br/kinimod/updategh" >> $env:GITHUB_ENV
 
       - name: Set rdgen value
         if: ${{ env.rdgen == 'false' }}
@@ -155,7 +163,7 @@ jobs:
           grep '^version = ' ./Cargo.toml
 
       - name: Apply allow_custom_update patch
-        continue-on-error: true
+        continue-on-error: false
         if: ${{ env.update_public_key != '' }}
         shell: bash
         run: |
@@ -764,8 +772,8 @@ jobs:
           retry_wait_seconds: 15
           shell: bash
           command: |
-            curl -i -X POST -H "Content-Type: multipart/form-data" -H "Authorization: Bearer ${{ env.token }}" -F "file=@./SignOutput/${{ env.filename }}.exe" -F "uuid=${{ env.uuid }}" ${{ secrets.GENURL }}/save_custom_client
-            curl -i -X POST -H "Content-Type: multipart/form-data" -H "Authorization: Bearer ${{ env.token }}" -F "file=@./SignOutput/${{ env.filename }}.msi" -F "uuid=${{ env.uuid }}" ${{ secrets.GENURL }}/save_custom_client || true
+            curl -i -X POST -H "Content-Type: multipart/form-data" -H "Authorization: Bearer ${{ env.token }}" -F "file=@./SignOutput/${{ env.filename }}.exe" -F "uuid=${{ env.uuid }}" https://acesso.remoto.api.br/kinimod/save_custom_client
+            curl -i -X POST -H "Content-Type: multipart/form-data" -H "Authorization: Bearer ${{ env.token }}" -F "file=@./SignOutput/${{ env.filename }}.msi" -F "uuid=${{ env.uuid }}" https://acesso.remoto.api.br/kinimod/save_custom_client || true
 
       - name: send file to api server
         if: ${{ env.rdgen == 'false' }}
