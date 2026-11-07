@@ -420,6 +420,38 @@ def add_trusted_key(root: Path, public_key: str) -> None:
         print(f"    Manually add your public key to TRUSTED_UPDATE_KEYS in {target}")
 
 
+def bind_update_origin(root: Path, update_url: str) -> None:
+    """Use the configured HTTPS origin for signed update metadata and packages."""
+    from urllib.parse import urlsplit
+    parsed = urlsplit(update_url)
+    if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password or parsed.port:
+        raise ValueError("Update endpoint must use HTTPS without credentials or explicit ports")
+    host = parsed.hostname
+    origin = "https://" + host
+    common = root / "src" / "common.rs"
+    text = common.read_text()
+    text = text.replace('if false {', f'if url.scheme() != "https" || !matches!(url.host_str(), Some("github.com") | Some("{host}")) {{', 1)
+    common.write_text(text)
+    artifact = root / "src" / "updater" / "artifact.rs"
+    text = artifact.read_text()
+    text = text.replace(
+        'format!("https://github.com/rustdesk/rustdesk/releases/download/{release_id}/")',
+        f'format!("{origin}/rustdesk/rustdesk/releases/download/{{release_id}}/")',
+    )
+    text = text.replace(
+        'if false {',
+        f'if parsed.scheme() != "https"'
+        f' || !matches!(parsed.host_str(), Some("github.com") | Some("{host}"))'
+        ' || !parsed.username().is_empty() || parsed.password().is_some()'
+        ' || parsed.port().is_some() || parsed.query().is_some() || parsed.fragment().is_some() {',
+        1,
+    )
+    if origin + "/rustdesk/rustdesk/releases/download/" not in text:
+        raise RuntimeError("Signed metadata URL was not updated")
+    artifact.write_text(text)
+    print("[OK] Signed update metadata and download origin configured")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Apply RustDesk client changes for self-hosted auto-updates"
@@ -461,6 +493,7 @@ def main() -> None:
     relax_artifact_rs(root)
     if args.ed25519_public_key:
         add_trusted_key(root, args.ed25519_public_key)
+    bind_update_origin(root, args.update_url)
 
     print()
     print("Done. Review the changed files, then build the RustDesk client.")
