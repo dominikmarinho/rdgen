@@ -1,0 +1,29 @@
+name: Start Kinimod builds
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/5 * * * *'
+permissions:
+  contents: read
+  actions: write
+jobs:
+  start:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Start each client build once
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for platform in windows linux android; do
+            workflow="generator-${platform}.yml"
+            count=$(gh api "repos/${GH_REPO}/actions/workflows/${workflow}/runs?event=workflow_dispatch&per_page=1" --jq '.total_count')
+            if [ "$count" = 0 ]; then
+              gh workflow run "$workflow" --repo "$GH_REPO" --ref master -f version=1.5.1 -f zip_url='{}'
+              echo "Started ${platform}"
+            else
+              echo "${platform} already started"
+            fi
+          done
