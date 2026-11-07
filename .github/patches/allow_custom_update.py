@@ -449,6 +449,14 @@ def bind_update_origin(root: Path, update_url: str) -> None:
     if origin + "/rustdesk/rustdesk/releases/download/" not in text:
         raise RuntimeError("Signed metadata URL was not updated")
     artifact.write_text(text)
+    build_script = root / "build.py"
+    if build_script.exists():
+        text = build_script.read_text()
+        text = text.replace(
+            "system2('mkdir -p tmpdeb/usr/lib/rustdesk')",
+            "os.makedirs('tmpdeb/usr/lib/rustdesk', exist_ok=True)",
+        )
+        build_script.write_text(text)
     print("[OK] Signed update metadata and download origin configured")
 
 
