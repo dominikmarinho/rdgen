@@ -1,48 +1,40 @@
-name: 'Decrypt and Mask Secrets'
-description: 'Decrypts a zip and masks the JSON contents as env vars'
+name: Load Kinimod build configuration
+description: Fetch private build settings using GitHub Actions OIDC
 inputs:
   zip_password:
-    description: 'Password for the Zip'
-    required: true
-  zip_path:
-    description: 'Path to the encrypted zip'
     required: false
-    default: 'secrets.zip'
-
+  zip_path:
+    required: false
 runs:
-  using: "composite"
+  using: composite
   steps:
-    - name: install python deps
-      shell: bash
-      run: |
-        pip install pyzipper
-    - name: Decrypt and Mask
+    - name: Authenticate build and load settings
       shell: python
-      env:
-        PYTHONUTF8: "1"
-        PYTHONIOENCODING: "utf-8"
       run: |
-        import sys
-        import io
-        import pyzipper
-        import json
-        import os
-
-        # Force UTF-8 stdout/stderr so secrets with characters outside
-        # the runner codepage (CJK, emoji, etc.) do not crash this step
-        # on Windows runners (default cp1251) with UnicodeEncodeError
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
-        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
-
-        with pyzipper.AESZipFile('${{ inputs.zip_path }}') as zf:
-            zf.setpassword('${{ inputs.zip_password }}'.encode())
-            with zf.open('secrets.json') as f:
-                secrets = json.load(f)
-
-        with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as env_file:
-            for key, value in secrets.items():
-                if value:
-                    print(f"::add-mask::{value}")
-                    env_file.write(f"{key}={value}\n")
-        
-        print(f"Successfully masked {len(secrets)} secrets.")
+        import json, os, re, urllib.request, urllib.parse
+        workflow = os.environ["GITHUB_WORKFLOW_REF"]
+        match = re.search(r"/generator-(windows|linux|android)\.yml@", workflow)
+        if not match:
+            raise RuntimeError("Unexpected build workflow")
+        audience = "https://acesso.remoto.api.br/kinimod/build"
+        url = os.environ["ACTIONS_ID_TOKEN_REQUEST_URL"] + "&audience=" + urllib.parse.quote(audience, safe="")
+        request = urllib.request.Request(url, headers={"Authorization": "Bearer " + os.environ["ACTIONS_ID_TOKEN_REQUEST_TOKEN"]})
+        with urllib.request.urlopen(request, timeout=30) as response:
+            token = json.load(response)["value"]
+        print("::add-mask::" + token)
+        request = urllib.request.Request(
+            audience + "/config/" + match.group(1),
+            headers={"Authorization": "Bearer " + token},
+        )
+        with urllib.request.urlopen(request, timeout=30) as response:
+            settings = json.load(response)
+        with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as target:
+            for key, value in settings.items():
+                if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key):
+                    raise RuntimeError("Invalid environment variable")
+                value = str(value)
+                if "\n" in value or "\r" in value:
+                    raise RuntimeError("Multiline value is not supported")
+                print("::add-mask::" + value)
+                target.write(key + "=" + value + "\n")
+        print("Authenticated configuration loaded")
