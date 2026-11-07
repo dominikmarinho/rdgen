@@ -394,29 +394,21 @@ def add_trusted_key(root: Path, public_key: str) -> None:
 
     text = target.read_text(encoding="utf-8")
 
-    old_block = '''const TRUSTED_UPDATE_KEYS: &[TrustedUpdateKey] = &[TrustedUpdateKey {
-    key_id: "2026-ed25519-main",
-    algorithm: SIGNATURE_ALGORITHM,
-    public_key: [
-        118, 252, 116, 215, 49, 217, 220, 109, 145, 119, 210, 101, 225, 198, 63, 2, 41, 127, 197,
-        127, 52, 251, 6, 204, 125, 117, 96, 204, 187, 166, 85, 59,
-    ],
-}];'''
+    match = re.search(
+        r"const TRUSTED_UPDATE_KEYS: &\[TrustedUpdateKey\] = &\[TrustedUpdateKey \{.*?\n\}\];",
+        text, re.DOTALL,
+    )
+    if not match:
+        raise RuntimeError("Trusted update key declaration not found")
+    old_block = match.group(0)
 
-    new_block = f'''const TRUSTED_UPDATE_KEYS: &[TrustedUpdateKey] = &[TrustedUpdateKey {{
-    key_id: "2026-ed25519-main",
-    algorithm: SIGNATURE_ALGORITHM,
-    public_key: [
-        118, 252, 116, 215, 49, 217, 220, 109, 145, 119, 210, 101, 225, 198, 63, 2, 41, 127, 197,
-        127, 52, 251, 6, 204, 125, 117, 96, 204, 187, 166, 85, 59,
-    ],
-}}, TrustedUpdateKey {{
+    new_block = old_block[:-2] + f""", TrustedUpdateKey {{
     key_id: "custom-update",
     algorithm: SIGNATURE_ALGORITHM,
     public_key: [
         {byte_list}
     ],
-}}];'''
+}}];"""
 
     count = text.count(old_block)
     if count > 0:
