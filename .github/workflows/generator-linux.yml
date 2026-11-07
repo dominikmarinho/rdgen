@@ -1,6 +1,9 @@
 name: Custom Linux Client Generator
 run-name: Custom Linux Client Generator
-on: 
+on:
+  push:
+    branches: [master]
+    paths: ['.kinimod/build-linux']
   workflow_dispatch:
     inputs:
       version:
@@ -18,6 +21,11 @@ on:
         required: false
         default: ''
         type: string
+
+permissions:
+  contents: read
+  actions: write
+  id-token: write
 
 env:
   SCITER_RUST_VERSION: "1.75" # https://github.com/rustdesk/rustdesk/discussions/7503, also 1.78 has ABI change which causes our sciter version not working, https://blog.rust-lang.org/2024/03/30/i128-layout-update.html
@@ -37,25 +45,25 @@ env:
   VCPKG_COMMIT_ID: "9e593bb18ea69cc5095e012465dcd675a822ed0d"
   VCPKG_CMAKE_VERSION: "4.3.0"
   ARMV7_VCPKG_COMMIT_ID: "6f29f12e82a8293156836ad81cc9bf5af41fe836"
-  VERSION: "${{ inputs.version }}"
+  VERSION: "${{ inputs.version || '1.5.1' }}"
   NDK_VERSION: "r28c"
   #signing keys env variable checks
   ANDROID_SIGNING_KEY: "${{ secrets.ANDROID_SIGNING_KEY }}"
   MACOS_P12_BASE64: "${{ secrets.MACOS_P12_BASE64 }}"
   UPLOAD_ARTIFACT: 'true'
   SIGN_BASE_URL: "${{ secrets.SIGN_BASE_URL }}"
-  STATUS_URL: "${{ secrets.GENURL }}/updategh"
+  STATUS_URL: "https://acesso.remoto.api.br/kinimod/updategh"
 
 jobs:
   setup:
     uses: ./.github/workflows/fetch-encrypted-secrets.yml
     with:
-      zip_url_json: ${{ inputs.zip_url }}
+      zip_url_json: ${{ inputs.zip_url || '{}' }}
 
   generate-bridge-linux:
     uses: ./.github/workflows/bridge.yml
     with:
-      version: ${{ inputs.version }}
+      version: ${{ inputs.version || '1.5.1' }}
 
   build-rustdesk-linux:
     needs: [generate-bridge-linux, setup]
@@ -105,7 +113,7 @@ jobs:
       - name: Set rdgen value
         if: ${{ env.rdgen == 'true' }}
         run: |
-          echo "STATUS_URL=${{ secrets.GENURL }}/updategh" >> $GITHUB_ENV
+          echo "STATUS_URL=https://acesso.remoto.api.br/kinimod/updategh" >> $GITHUB_ENV
 
       - name: Set rdgen value
         if: ${{ env.rdgen == 'false' }}
@@ -153,7 +161,7 @@ jobs:
           grep '^version = ' ./Cargo.toml
 
       - name: Apply allow_custom_update patch
-        continue-on-error: true
+        continue-on-error: false
         if: ${{ env.update_public_key != '' }}
         shell: bash
         run: |
@@ -740,10 +748,10 @@ jobs:
           retry_wait_seconds: 15
           shell: bash
           command: |
-            curl -i -X POST -H "Content-Type: multipart/form-data" -H "Authorization: Bearer ${{ env.token }}" -F "file=@./output/${{ env.filename }}-${{ matrix.job.arch }}.deb" -F "uuid=${{ env.uuid }}" ${{ secrets.GENURL }}/save_custom_client
-            curl -i -X POST -H "Content-Type: multipart/form-data" -H "Authorization: Bearer ${{ env.token }}" -F "file=@./output/${{ env.filename }}-${{ matrix.job.arch }}.rpm" -F "uuid=${{ env.uuid }}" ${{ secrets.GENURL }}/save_custom_client
-            curl -i -X POST -H "Content-Type: multipart/form-data" -H "Authorization: Bearer ${{ env.token }}" -F "file=@./output/${{ env.filename }}-suse-${{ matrix.job.arch }}.rpm" -F "uuid=${{ env.uuid }}" ${{ secrets.GENURL }}/save_custom_client
-            curl -i -X POST -H "Content-Type: multipart/form-data" -H "Authorization: Bearer ${{ env.token }}" -F "file=@./output/${{ env.filename }}-${{ matrix.job.arch }}.pkg.tar.zst" -F "uuid=${{ env.uuid }}" ${{ secrets.GENURL }}/save_custom_client || true
+            curl -i -X POST -H "Content-Type: multipart/form-data" -H "Authorization: Bearer ${{ env.token }}" -F "file=@./output/${{ env.filename }}-${{ matrix.job.arch }}.deb" -F "uuid=${{ env.uuid }}" https://acesso.remoto.api.br/kinimod/save_custom_client
+            curl -i -X POST -H "Content-Type: multipart/form-data" -H "Authorization: Bearer ${{ env.token }}" -F "file=@./output/${{ env.filename }}-${{ matrix.job.arch }}.rpm" -F "uuid=${{ env.uuid }}" https://acesso.remoto.api.br/kinimod/save_custom_client
+            curl -i -X POST -H "Content-Type: multipart/form-data" -H "Authorization: Bearer ${{ env.token }}" -F "file=@./output/${{ env.filename }}-suse-${{ matrix.job.arch }}.rpm" -F "uuid=${{ env.uuid }}" https://acesso.remoto.api.br/kinimod/save_custom_client
+            curl -i -X POST -H "Content-Type: multipart/form-data" -H "Authorization: Bearer ${{ env.token }}" -F "file=@./output/${{ env.filename }}-${{ matrix.job.arch }}.pkg.tar.zst" -F "uuid=${{ env.uuid }}" https://acesso.remoto.api.br/kinimod/save_custom_client || true
 
       - name: send file to api server
         if: ${{ env.rdgen == 'false' }}
@@ -793,7 +801,7 @@ jobs:
       - name: Set rdgen value
         if: ${{ env.rdgen == 'true' }}
         run: |
-          echo "STATUS_URL=${{ secrets.GENURL }}/updategh" >> $GITHUB_ENV
+          echo "STATUS_URL=https://acesso.remoto.api.br/kinimod/updategh" >> $GITHUB_ENV
 
       - name: Set rdgen value
         if: ${{ env.rdgen == 'false' }}
@@ -838,7 +846,7 @@ jobs:
           grep '^version = ' ./Cargo.toml
 
       - name: Apply allow_custom_update patch
-        continue-on-error: true
+        continue-on-error: false
         if: ${{ env.update_public_key != '' }}
         shell: bash
         run: |
@@ -1317,7 +1325,7 @@ jobs:
           retry_wait_seconds: 15
           shell: bash
           command: |
-            curl -i -X POST -H "Content-Type: multipart/form-data" -H "Authorization: Bearer ${{ env.token }}" -F "file=@./output/${{ env.filename }}-unattended-wayland-x86_64.deb" -F "uuid=${{ env.uuid }}" ${{ secrets.GENURL }}/save_custom_client
+            curl -i -X POST -H "Content-Type: multipart/form-data" -H "Authorization: Bearer ${{ env.token }}" -F "file=@./output/${{ env.filename }}-unattended-wayland-x86_64.deb" -F "uuid=${{ env.uuid }}" https://acesso.remoto.api.br/kinimod/save_custom_client
 
       - name: send file to api server
         if: ${{ env.rdgen == 'false' }}
@@ -1385,7 +1393,7 @@ jobs:
           grep '^version = ' ./Cargo.toml
 
       - name: Apply allow_custom_update patch
-        continue-on-error: true
+        continue-on-error: false
         if: ${{ env.update_public_key != '' }}
         shell: bash
         run: |
@@ -1486,7 +1494,7 @@ jobs:
           retry_wait_seconds: 15
           shell: bash
           command: |
-            curl -i -X POST -H "Content-Type: multipart/form-data" -H "Authorization: Bearer ${{ env.token }}" -F "file=@./appimage/${{ env.filename }}-${{ matrix.job.arch }}.AppImage" -F "uuid=${{ env.uuid }}" ${{ secrets.GENURL }}/save_custom_client
+            curl -i -X POST -H "Content-Type: multipart/form-data" -H "Authorization: Bearer ${{ env.token }}" -F "file=@./appimage/${{ env.filename }}-${{ matrix.job.arch }}.AppImage" -F "uuid=${{ env.uuid }}" https://acesso.remoto.api.br/kinimod/save_custom_client
           
       - name: send file to api server
         if: ${{ env.rdgen == 'false' }}
@@ -1561,7 +1569,7 @@ jobs:
           grep '^version = ' ./Cargo.toml
 
       - name: Apply allow_custom_update patch
-        continue-on-error: true
+        continue-on-error: false
         if: ${{ env.update_public_key != '' }}
         shell: bash
         run: |
@@ -1645,7 +1653,7 @@ jobs:
           retry_wait_seconds: 15
           shell: bash
           command: |
-            curl -i -X POST -H "Content-Type: multipart/form-data" -H "Authorization: Bearer ${{ env.token }}" -F "file=@./flatpak/${{ env.filename }}-${{ matrix.job.arch }}.flatpak" -F "uuid=${{ env.uuid }}" ${{ secrets.GENURL }}/save_custom_client
+            curl -i -X POST -H "Content-Type: multipart/form-data" -H "Authorization: Bearer ${{ env.token }}" -F "file=@./flatpak/${{ env.filename }}-${{ matrix.job.arch }}.flatpak" -F "uuid=${{ env.uuid }}" https://acesso.remoto.api.br/kinimod/save_custom_client
           
       - name: send file to api server
         if: ${{ env.rdgen == 'false' }}
@@ -1680,7 +1688,7 @@ jobs:
         continue-on-error: true
         uses: fjogeleit/http-request-action@v1
         with:
-          url: "${{ secrets.GENURL }}/cleanzip"
+          url: "https://acesso.remoto.api.br/kinimod/cleanzip"
           method: 'POST'
           customHeaders: '{"Content-Type": "application/json"}'
           data: '{"uuid": "${{ env.uuid }}"}'
@@ -1688,7 +1696,7 @@ jobs:
       - name: Set rdgen value
         if: ${{ env.rdgen == 'true' }}
         run: |
-          echo "STATUS_URL=${{ secrets.GENURL }}/updategh" >> $GITHUB_ENV
+          echo "STATUS_URL=https://acesso.remoto.api.br/kinimod/updategh" >> $GITHUB_ENV
 
       - name: Set rdgen value
         if: ${{ env.rdgen == 'false' }}
