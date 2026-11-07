@@ -1,1 +1,1 @@
-Build remoto-kinimod 1.5.1 with authenticated server configuration and signed updates.
+Build remoto-kinimod 1.5.1 with verified OIDC configuration and corrected signed update origin.
