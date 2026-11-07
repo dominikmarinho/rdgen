@@ -610,6 +610,23 @@ jobs:
           convert ./res/128x128.png -resize 200% ./flutter/assets/128x128@2x.png || true
           cp ./flutter/assets/icon.svg ./res/scalable.svg
 
+      - name: Import generated resources for custom Android namespace
+        shell: python
+        env:
+          CUSTOM_ANDROID_ID: ${{ env.androidappid }}
+        run: |
+          import os, re
+          from pathlib import Path
+          namespace = os.environ["CUSTOM_ANDROID_ID"]
+          if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+", namespace):
+              raise RuntimeError("Invalid Android namespace")
+          for path in Path("flutter/android/app/src/main/kotlin").rglob("*.kt"):
+              text = path.read_text()
+              if re.search(r"\bR\.", text) and namespace != "com.carriez.flutter_hbb":
+                  text = re.sub(r"import [\w.]+\.R\n", "", text)
+                  text = re.sub(r"^(package [^\n]+\n)", r"\1\nimport " + namespace + ".R\n", text, count=1, flags=re.M)
+                  path.write_text(text)
+
       - name: Build rustdesk
         shell: bash
         env:
