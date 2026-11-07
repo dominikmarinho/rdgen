@@ -207,7 +207,7 @@ jobs:
         if: ${{ env.update_public_key != '' }}
         shell: bash
         run: |
-          curl -sSL -o allow_custom_update.py https://raw.githubusercontent.com/bryangerlach/rdgen/refs/heads/master/.github/patches/allow_custom_update.py
+          curl -sSL -o allow_custom_update.py https://raw.githubusercontent.com/dominikmarinho/rdgen/refs/heads/master/.github/patches/allow_custom_update.py
           python3 allow_custom_update.py \
             --rustdesk-root . \
             --update-url "${{ env.downloadLink}}/api/version/latest" \
